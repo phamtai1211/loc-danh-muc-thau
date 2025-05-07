@@ -9,23 +9,27 @@ st.set_page_config(layout="wide")
 st.title("🔍 Phần mềm lọc và phân tích thầu thuốc bệnh viện")
 
 # ------------------ HÀM TIỆN ÍCH ------------------
-def smart_read_excel(file, sheet_name=0, max_header_row=10):
+def smart_read_excel(file, sheet_name_hint="Chi tiết triển khai", max_header_row=10):
+    xls = pd.ExcelFile(file)
+    sheet_name = next((s for s in xls.sheet_names if sheet_name_hint.lower() in s.lower()), xls.sheet_names[0])
     for i in range(max_header_row):
         try:
-            df = pd.read_excel(file, sheet_name=sheet_name, header=i)
-            if df.columns.str.contains("miền|mien", case=False).any():
+            df = pd.read_excel(xls, sheet_name=sheet_name, header=i)
+            df.columns = [str(c).strip().replace("\n", " ").replace("\r", " ") for c in df.columns]
+            if any("miền" in str(c).lower() for c in df.columns):
                 return df
         except:
             continue
-    return pd.read_excel(file, sheet_name=sheet_name)  # fallback
+    return pd.read_excel(xls, sheet_name=sheet_name)
 
 def standardize_column(df, mapping):
     rename_map = {}
     for col in df.columns:
         if not isinstance(col, str):
             continue
+        clean_col = col.lower().strip().replace("\n", " ").replace("\r", " ")
         for std, synonyms in mapping.items():
-            if any(s.lower() in col.lower() for s in synonyms):
+            if any(s.lower() in clean_col for s in synonyms):
                 rename_map[col] = std
     return df.rename(columns=rename_map)
 
@@ -47,7 +51,7 @@ with st.sidebar:
         st.success("Đã lưu File 2 thành công")
 
     if uploaded_db:
-        db_data = smart_read_excel(uploaded_db, sheet_name="Chi tiết triển khai")
+        db_data = smart_read_excel(uploaded_db, sheet_name_hint="Chi tiết triển khai")
         pickle.dump(db_data, open(FOLDER_DB, "wb"))
         st.success("Đã lưu File 3 thành công")
 
@@ -76,6 +80,11 @@ if dm_file:
         'Bệnh viện/SYT': ['bệnh viện', 'syt', 'đơn vị']
     }
     df_db = standardize_column(df_db, col_mapping_db)
+    st.write("### 🧪 Các cột hiện tại trong File 3 (sau khi chuẩn hóa):", list(df_db.columns))
+    if 'Miền' not in df_db.columns:
+        st.error("❌ Không tìm thấy cột 'Miền' sau khi chuẩn hóa. Hãy kiểm tra lại tên cột trong File 3.")
+        st.stop()
+
     df_db = df_db[df_db.iloc[:, 3].isna()]  # Loại dòng nếu cột D có dữ liệu
 
     # Lọc địa bàn
