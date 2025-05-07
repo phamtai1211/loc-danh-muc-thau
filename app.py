@@ -1,4 +1,4 @@
-# Phần mềm lọc danh mục thầu thuốc bệnh viện - Phiên bản thông minh hơn
+# Phần mềm lọc danh mục thầu thuốc bệnh viện - Phiên bản thông minh hơn + Rút gọn File 3
 
 import streamlit as st
 import pandas as pd
@@ -15,7 +15,7 @@ def smart_read_excel(file, sheet_name_hint="Chi tiết triển khai", max_header
     for i in range(max_header_row):
         try:
             df = pd.read_excel(xls, sheet_name=sheet_name, header=i)
-            df.columns = [str(c).strip().replace("\n", " ").replace("\r", " ") for c in df.columns]
+            df.columns = [str(c).strip().replace("\n", " ").replace("\r", "") for c in df.columns]
             if any("miền" in str(c).lower() for c in df.columns):
                 return df
         except:
@@ -27,11 +27,19 @@ def standardize_column(df, mapping):
     for col in df.columns:
         if not isinstance(col, str):
             continue
-        clean_col = col.lower().strip().replace("\n", " ").replace("\r", " ")
+        clean_col = col.lower().strip().replace("\n", " ").replace("\r", "")
         for std, synonyms in mapping.items():
             if any(s.lower() in clean_col for s in synonyms):
                 rename_map[col] = std
     return df.rename(columns=rename_map)
+
+def rut_gon_file3(df):
+    selected_columns = [
+        "Miền", "Vùng", "Tỉnh", "Bệnh viện/SYT", "Địa bàn",
+        "Tên sản phẩm", "Hoạt chất", "Hàm lượng/ Nồng độ", "Gói thầu", "Tên KH phụ trách triển khai"
+    ]
+    df_filtered = df[[col for col in selected_columns if col in df.columns]]
+    return df_filtered
 
 # ------------------ CẤU HÌNH ------------------
 FOLDER_SP = "du_lieu_luu/sp_file.pkl"
@@ -48,12 +56,21 @@ with st.sidebar:
     if uploaded_sp:
         sp_data = smart_read_excel(uploaded_sp)
         pickle.dump(sp_data, open(FOLDER_SP, "wb"))
-        st.success("Đã lưu File 2 thành công")
+        st.success("✅ Đã lưu File 2 thành công")
 
     if uploaded_db:
         db_data = smart_read_excel(uploaded_db, sheet_name_hint="Chi tiết triển khai")
         pickle.dump(db_data, open(FOLDER_DB, "wb"))
-        st.success("Đã lưu File 3 thành công")
+        st.success("✅ Đã lưu File 3 thành công")
+
+        # Tạo file rút gọn và cho phép tải
+        st.markdown("### 📂 Tải File 3 rút gọn")
+        df_tomtat = rut_gon_file3(db_data)
+        st.download_button(
+            "📥 Tải về file3_tomtat.xlsx",
+            df_tomtat.to_excel(index=False, engine='openpyxl'),
+            file_name="file3_tomtat.xlsx"
+        )
 
 # ------------------ CHỨC NĂNG 1: LỌC DANH MỤC ------------------
 st.subheader("📄 Chức năng 1: Lọc danh mục mời thầu")
@@ -69,7 +86,6 @@ if dm_file:
         st.warning("Vui lòng tải trước File 2 và File 3 ở thanh bên")
         st.stop()
 
-    # Chuẩn hóa cột địa bàn
     col_mapping_db = {
         'Miền': ['miền', 'mien'],
         'Vùng': ['vùng', 'vung'],
@@ -85,9 +101,8 @@ if dm_file:
         st.error("❌ Không tìm thấy cột 'Miền' sau khi chuẩn hóa. Hãy kiểm tra lại tên cột trong File 3.")
         st.stop()
 
-    df_db = df_db[df_db.iloc[:, 3].isna()]  # Loại dòng nếu cột D có dữ liệu
+    df_db = df_db[df_db.iloc[:, 3].isna()]
 
-    # Lọc địa bàn
     st.markdown("### 🔍 Chọn địa bàn để lọc")
     col1, col2, col3 = st.columns(3)
     mien_list = sorted(df_db['Miền'].dropna().unique())
@@ -102,7 +117,6 @@ if dm_file:
     df_loc = df_db[(df_db['Miền'] == mien) & (df_db['Vùng'] == vung) & (df_db['Tỉnh'] == tinh)]
     ten_sp_loc = df_loc['Tên sản phẩm'].dropna().str.lower().unique().tolist()
 
-    # Lọc trong file DM
     ten_cols = [c for c in df_dm.columns if isinstance(c, str) and any(x in c.lower() for x in ['tên', 'thuốc'])]
     if ten_cols:
         col_ten = ten_cols[0]
