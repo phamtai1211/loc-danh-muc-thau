@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import io
@@ -52,7 +53,6 @@ if menu == "Lọc danh mục thầu":
             final_df = pd.merge(final_df, tong_theo_hoatchat_hamluong, on=['Tên hoạt chất', 'Nồng độ/Hàm lượng'], how='left')
             final_df['Tỉ trọng nhóm (%)'] = round(final_df['Số lượng'] / final_df['Tổng SL cùng hoạt chất-hàm lượng'] * 100, 2)
 
-            # Format số có dấu phẩy
             for col in ['Số lượng', 'Giá kế hoạch', 'Tổng SL cùng hoạt chất-hàm lượng']:
                 if col in final_df.columns:
                     final_df[col] = final_df[col].apply(lambda x: f"{x:,.0f}" if pd.notnull(x) else x)
@@ -95,4 +95,28 @@ elif menu == "Phân tích danh mục BV":
             st.dataframe(dang_summary)
 
             st.subheader("🔥 Top 10 hoạt chất theo số lượng")
-            top10 = df_dm.groupby('Tên hoạt chất').agg(SL=('Số lượng
+            top10 = df_dm.groupby('Tên hoạt chất').agg(SL=('Số lượng', 'sum')).sort_values(by='SL', ascending=False).head(10)
+            top10['SL'] = top10['SL'].apply(lambda x: f"{x:,.0f}")
+            st.dataframe(top10)
+
+            st.subheader("📌 Phân nhóm điều trị")
+            def classify_hoatchat(hc):
+                hc = str(hc).lower()
+                if any(x in hc for x in ['cef','peni','mycin','levo']): return 'Kháng sinh'
+                elif any(x in hc for x in ['losartan','amlodipin','pril']): return 'Tim mạch'
+                elif any(x in hc for x in ['metformin','insulin']): return 'Đái tháo đường'
+                elif any(x in hc for x in ['paracetamol','ibu','meloxi']): return 'Giảm đau'
+                elif any(x in hc for x in ['pantoprazol','omeprazol']): return 'Tiêu hóa'
+                elif any(x in hc for x in ['cisplatin','doxo']): return 'Ung thư'
+                else: return 'Khác'
+
+            df_dm['Nhóm điều trị'] = df_dm['Tên hoạt chất'].apply(classify_hoatchat)
+            group_dt = df_dm.groupby('Nhóm điều trị').agg(SL=('Số lượng','sum'), Giá=('Trị giá thầu','sum')).sort_values(by='Giá', ascending=False)
+            group_dt['SL'] = group_dt['SL'].apply(lambda x: f"{x:,.0f}")
+            group_dt['Giá'] = group_dt['Giá'].apply(lambda x: f"{x:,.0f}")
+            st.dataframe(group_dt)
+
+        except Exception as e:
+            st.error(f"❌ Lỗi khi xử lý: {e}")
+    else:
+        st.info("⬆️ Tải lên file danh mục thầu bệnh viện để bắt đầu phân tích.")
