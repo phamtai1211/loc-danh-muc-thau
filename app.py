@@ -5,8 +5,23 @@ import io
 
 
 
+
 def standardize_column_names(df):
     rename_map = {}
+    for col in df.columns:
+        lower_col = str(col).strip().lower()
+        if ('hoạt chất' in lower_col or 'thành phần' in lower_col) and 'tên' in lower_col:
+            rename_map[col] = 'Tên hoạt chất'
+        elif 'nồng độ' in lower_col and 'hàm lượng' in lower_col:
+            rename_map[col] = 'Nồng độ/Hàm lượng'
+        elif 'nhóm' in lower_col:
+            rename_map[col] = 'Nhóm thuốc'
+        elif 'giá' in lower_col and 'hoạch' in lower_col:
+            rename_map[col] = 'Giá kế hoạch'
+        elif 'giá' in lower_col and ('dự' in lower_col or 'trúng' in lower_col or 'thực tế' in lower_col):
+            rename_map[col] = 'Giá dự thầu'
+    df = df.rename(columns=rename_map)
+    return df
     for col in df.columns:
         lower_col = str(col).strip().lower()
         if ('hoạt chất' in lower_col or 'thành phần' in lower_col) and 'tên' in lower_col:
@@ -176,7 +191,7 @@ elif menu == "Phân tích danh mục mời thầu":
             st.error(f"❌ Lỗi khi xử lý file mời thầu: {e}")
 
 elif menu == "Phân tích danh mục trúng thầu":
-    file_dm = st.file_uploader("Tải lên file Danh mục TRÚNG thầu của BV", type=["xls", "xlsx"], key="dmfile_trung")
+    file_dm = st.file_uploader("📥 Tải lên file Danh mục TRÚNG thầu của BV", type=["xls", "xlsx"], key="dmfile_trung")
     if file_dm:
         try:
             df_dm = read_excel_with_auto_header(file_dm)
@@ -206,7 +221,7 @@ elif menu == "Phân tích danh mục trúng thầu":
         except Exception as e:
             st.error(f"❌ Lỗi khi xử lý file trúng thầu: {e}")
 
-    file_dm = st.file_uploader("Tải lên file Danh mục mời thầu của BV", type=["xls", "xlsx"], key="dmfile")
+    file_dm = 
 
     if file_dm:
         try:
