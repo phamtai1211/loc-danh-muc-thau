@@ -22,6 +22,8 @@ def smart_read_excel(file, sheet_name=0, max_header_row=10):
 def standardize_column(df, mapping):
     rename_map = {}
     for col in df.columns:
+        if not isinstance(col, str):
+            continue
         for std, synonyms in mapping.items():
             if any(s.lower() in col.lower() for s in synonyms):
                 rename_map[col] = std
@@ -92,7 +94,7 @@ if dm_file:
     ten_sp_loc = df_loc['Tên sản phẩm'].dropna().str.lower().unique().tolist()
 
     # Lọc trong file DM
-    ten_cols = [c for c in df_dm.columns if any(x in c.lower() for x in ['tên', 'thuốc'])]
+    ten_cols = [c for c in df_dm.columns if isinstance(c, str) and any(x in c.lower() for x in ['tên', 'thuốc'])]
     if ten_cols:
         col_ten = ten_cols[0]
         df_filtered = df_dm[df_dm[col_ten].str.lower().fillna('').apply(lambda x: any(sp in x for sp in ten_sp_loc))]
