@@ -4,8 +4,25 @@ import pandas as pd
 import io
 
 
+
 def standardize_column_names(df):
     rename_map = {}
+    for col in df.columns:
+        lower_col = str(col).strip().lower()
+        if ('hoạt chất' in lower_col or 'thành phần' in lower_col) and 'tên' in lower_col:
+            rename_map[col] = 'Tên hoạt chất'
+        elif 'nồng độ' in lower_col and 'hàm lượng' in lower_col:
+            rename_map[col] = 'Nồng độ/Hàm lượng'
+        elif 'nhóm' in lower_col:
+            rename_map[col] = 'Nhóm thuốc'
+        elif 'giá' in lower_col and 'hoạch' in lower_col:
+            rename_map[col] = 'Giá kế hoạch'
+        elif 'giá' in lower_col and 'dự' in lower_col:
+            rename_map[col] = 'Giá kế hoạch'
+        elif 'giá' in lower_col and 'tạm' in lower_col:
+            rename_map[col] = 'Giá kế hoạch'
+    df = df.rename(columns=rename_map)
+    return df
     for col in df.columns:
         lower_col = str(col).strip().lower()
         if ('hoạt chất' in lower_col or 'thành phần' in lower_col) and 'tên' in lower_col:
