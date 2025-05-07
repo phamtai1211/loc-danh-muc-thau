@@ -45,13 +45,19 @@ if menu == "Lọc danh mục thầu":
             merged_df['Tên sản phẩm'] = merged_df['Tên sản phẩm'].astype(str).str.strip().str.lower()
             final_df = pd.merge(merged_df, df3, on='Tên sản phẩm', how='left')
 
-            # Tính tỉ trọng nhóm
             tong_theo_hoatchat_hamluong = (
                 df1.groupby(['Tên hoạt chất', 'Nồng độ/Hàm lượng'])['Số lượng'].sum().reset_index()
                 .rename(columns={'Số lượng': 'Tổng SL cùng hoạt chất-hàm lượng'})
             )
             final_df = pd.merge(final_df, tong_theo_hoatchat_hamluong, on=['Tên hoạt chất', 'Nồng độ/Hàm lượng'], how='left')
             final_df['Tỉ trọng nhóm (%)'] = round(final_df['Số lượng'] / final_df['Tổng SL cùng hoạt chất-hàm lượng'] * 100, 2)
+
+            # Format số có dấu phẩy
+            for col in ['Số lượng', 'Giá kế hoạch', 'Tổng SL cùng hoạt chất-hàm lượng']:
+                if col in final_df.columns:
+                    final_df[col] = final_df[col].apply(lambda x: f"{x:,.0f}" if pd.notnull(x) else x)
+            if 'Tỉ trọng nhóm (%)' in final_df.columns:
+                final_df['Tỉ trọng nhóm (%)'] = final_df['Tỉ trọng nhóm (%)'].apply(lambda x: f"{x:.2f}%")
 
             st.success(f"✅ Lọc được {len(final_df)} dòng phù hợp")
             st.dataframe(final_df)
@@ -78,32 +84,15 @@ elif menu == "Phân tích danh mục BV":
 
             st.subheader("📊 Thống kê nhóm thuốc")
             nhom_summary = df_dm.groupby('Nhóm thuốc chuẩn').agg(SL=('Số lượng','sum'), Giá=('Trị giá thầu','sum'))
+            nhom_summary['SL'] = nhom_summary['SL'].apply(lambda x: f"{x:,.0f}")
+            nhom_summary['Giá'] = nhom_summary['Giá'].apply(lambda x: f"{x:,.0f}")
             st.dataframe(nhom_summary)
 
             st.subheader("💊 Thống kê dạng bào chế")
             dang_summary = df_dm.groupby('Dạng bào chế').agg(SL=('Số lượng','sum'), Giá=('Trị giá thầu','sum'))
+            dang_summary['SL'] = dang_summary['SL'].apply(lambda x: f"{x:,.0f}")
+            dang_summary['Giá'] = dang_summary['Giá'].apply(lambda x: f"{x:,.0f}")
             st.dataframe(dang_summary)
 
             st.subheader("🔥 Top 10 hoạt chất theo số lượng")
-            top10 = df_dm.groupby('Tên hoạt chất').agg(SL=('Số lượng','sum')).sort_values(by='SL', ascending=False).head(10)
-            st.dataframe(top10)
-
-            st.subheader("📌 Phân nhóm điều trị")
-            def classify_hoatchat(hc):
-                hc = str(hc).lower()
-                if any(x in hc for x in ['cef','peni','mycin','levo']): return 'Kháng sinh'
-                elif any(x in hc for x in ['losartan','amlodipin','pril']): return 'Tim mạch'
-                elif any(x in hc for x in ['metformin','insulin']): return 'Đái tháo đường'
-                elif any(x in hc for x in ['paracetamol','ibu','meloxi']): return 'Giảm đau'
-                elif any(x in hc for x in ['pantoprazol','omeprazol']): return 'Tiêu hóa'
-                elif any(x in hc for x in ['cisplatin','doxo']): return 'Ung thư'
-                else: return 'Khác'
-
-            df_dm['Nhóm điều trị'] = df_dm['Tên hoạt chất'].apply(classify_hoatchat)
-            group_dt = df_dm.groupby('Nhóm điều trị').agg(SL=('Số lượng','sum'), Giá=('Trị giá thầu','sum')).sort_values(by='Giá', ascending=False)
-            st.dataframe(group_dt)
-
-        except Exception as e:
-            st.error(f"❌ Lỗi khi xử lý: {e}")
-    else:
-        st.info("⬆️ Tải lên file danh mục thầu bệnh viện để bắt đầu phân tích.")
+            top10 = df_dm.groupby('Tên hoạt chất').agg(SL=('Số lượng
