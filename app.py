@@ -88,16 +88,18 @@ elif menu == "Phân tích danh mục BV":
             nhom_summary['Giá'] = nhom_summary['Giá'].apply(lambda x: f"{x:,.0f}")
             st.dataframe(nhom_summary)
 
-            st.subheader("💊 Thống kê dạng bào chế")
-            dang_summary = df_dm.groupby('Dạng bào chế').agg(SL=('Số lượng','sum'), Giá=('Trị giá thầu','sum'))
-            dang_summary['SL'] = dang_summary['SL'].apply(lambda x: f"{x:,.0f}")
-            dang_summary['Giá'] = dang_summary['Giá'].apply(lambda x: f"{x:,.0f}")
-            st.dataframe(dang_summary)
+            st.subheader("🚀 Thống kê theo đường dùng")
+            duong_summary = df_dm.groupby('Đường dùng').agg(SL=('Số lượng','sum'), Giá=('Trị giá thầu','sum'))
+            duong_summary['SL'] = duong_summary['SL'].apply(lambda x: f"{x:,.0f}")
+            duong_summary['Giá'] = duong_summary['Giá'].apply(lambda x: f"{x:,.0f}")
+            st.dataframe(duong_summary)
 
-            st.subheader("🔥 Top 10 hoạt chất theo số lượng")
-            top10 = df_dm.groupby('Tên hoạt chất').agg(SL=('Số lượng', 'sum')).sort_values(by='SL', ascending=False).head(10)
-            top10['SL'] = top10['SL'].apply(lambda x: f"{x:,.0f}")
-            st.dataframe(top10)
+            st.subheader("🏅 Top 10 hoạt chất theo từng đường dùng")
+            for route in df_dm['Đường dùng'].dropna().unique():
+                st.markdown(f"### 👉 {route}")
+                top_route = df_dm[df_dm['Đường dùng'] == route].groupby('Tên hoạt chất').agg(SL=('Số lượng', 'sum')).sort_values(by='SL', ascending=False).head(10)
+                top_route['SL'] = top_route['SL'].apply(lambda x: f"{x:,.0f}")
+                st.dataframe(top_route)
 
             st.subheader("📌 Phân nhóm điều trị")
             def classify_hoatchat(hc):
@@ -115,6 +117,11 @@ elif menu == "Phân tích danh mục BV":
             group_dt['SL'] = group_dt['SL'].apply(lambda x: f"{x:,.0f}")
             group_dt['Giá'] = group_dt['Giá'].apply(lambda x: f"{x:,.0f}")
             st.dataframe(group_dt)
+
+            st.subheader("🔍 Xem chi tiết theo hoạt chất")
+            selected_hoatchat = st.selectbox("Chọn hoạt chất", df_dm['Tên hoạt chất'].dropna().unique())
+            df_detail = df_dm[df_dm['Tên hoạt chất'] == selected_hoatchat]
+            st.dataframe(df_detail[['Tên hoạt chất', 'Nồng độ/Hàm lượng', 'Nhóm thuốc', 'Số lượng', 'Giá kế hoạch', 'Trị giá thầu']])
 
         except Exception as e:
             st.error(f"❌ Lỗi khi xử lý: {e}")
