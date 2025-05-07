@@ -55,7 +55,7 @@ def read_excel_with_auto_header(uploaded_file):
 st.set_page_config(page_title="Lọc & Phân tích Thầu BV", layout="wide")
 st.title("📋 Hệ Thống Lọc & Phân Tích Danh Mục Thầu Bệnh Viện")
 
-menu = st.sidebar.radio("Chọn chức năng", ["Lọc danh mục thầu", "Phân tích danh mục BV"])
+menu = st.sidebar.radio("Chọn chức năng", ["Lọc danh mục thầu", "Phân tích danh mục mời thầu", "Phân tích danh mục trúng thầu"])
 
 if menu == "Lọc danh mục thầu":
     file1 = st.file_uploader("Tải lên file Danh mục thầu của Bệnh viện", type=["xls", "xlsx"], key="file1")
@@ -122,7 +122,90 @@ if menu == "Lọc danh mục thầu":
     else:
         st.info("⬆️ Tải đủ cả 3 file để lọc dữ liệu")
 
-elif menu == "Phân tích danh mục BV":
+
+elif menu == "Phân tích danh mục mời thầu":
+    file_dm = st.file_uploader("Tải lên file Danh mục MỜI thầu của BV", type=["xls", "xlsx"], key="dmfile_moi")
+    if file_dm:
+        try:
+            df_dm = read_excel_with_auto_header(file_dm)
+            df_dm = standardize_column_names(df_dm)
+            df_dm['Nhóm thuốc chuẩn'] = df_dm['Nhóm thuốc'].astype(str).str.extract(r'(\d)$')[0]
+            df_dm['Trị giá thầu'] = df_dm['Số lượng'] * df_dm['Giá kế hoạch']
+
+            st.subheader("📊 Thống kê nhóm thuốc")
+            nhom_summary = df_dm.groupby('Nhóm thuốc chuẩn').agg(SL=('Số lượng','sum'), Giá=('Trị giá thầu','sum'))
+            nhom_summary['SL'] = nhom_summary['SL'].apply(lambda x: f"{x:,.0f}")
+            nhom_summary['Giá'] = nhom_summary['Giá'].apply(lambda x: f"{x:,.0f}")
+            st.dataframe(nhom_summary)
+
+            st.subheader("🚀 Thống kê theo đường dùng")
+            duong_summary = df_dm.groupby('Đường dùng').agg(SL=('Số lượng','sum'), Giá=('Trị giá thầu','sum'))
+            duong_summary['SL'] = duong_summary['SL'].apply(lambda x: f"{x:,.0f}")
+            duong_summary['Giá'] = duong_summary['Giá'].apply(lambda x: f"{x:,.0f}")
+            st.dataframe(duong_summary)
+
+            st.subheader("🏅 Top 10 hoạt chất theo từng đường dùng")
+            for route in ['Uống', 'Tiêm']:
+                st.markdown(f"### 👉 {route}")
+                top_route = df_dm[df_dm['Đường dùng'] == route].groupby('Tên hoạt chất').agg(SL=('Số lượng', 'sum')).sort_values(by='SL', ascending=False).head(10)
+                top_route['SL'] = top_route['SL'].apply(lambda x: f"{x:,.0f}")
+                st.dataframe(top_route)
+
+            st.subheader("📌 Phân nhóm điều trị")
+            def classify_hoatchat(hc):
+                hc = str(hc).lower()
+                if any(x in hc for x in ['cef','peni','mycin','levo']): return 'Kháng sinh'
+                elif any(x in hc for x in ['losartan','amlodipin','pril','bisoprolol','clopidogrel','atorvastatin','trimetazidin']): return 'Tim mạch'
+                elif any(x in hc for x in ['metformin','insulin']): return 'Đái tháo đường'
+                elif any(x in hc for x in ['paracetamol','ibu','meloxi','diclofenac','naproxen','aspirin']): return 'Giảm đau'
+                elif any(x in hc for x in ['pantoprazol','omeprazol','rabeprazol','ranitidin','domperidon']): return 'Tiêu hóa'
+                elif any(x in hc for x in ['cisplatin','doxo']): return 'Ung thư'
+                else: return 'Khác'
+
+            df_dm['Nhóm điều trị'] = df_dm['Tên hoạt chất'].apply(classify_hoatchat)
+            group_dt = df_dm.groupby('Nhóm điều trị').agg(SL=('Số lượng','sum'), Giá=('Trị giá thầu','sum')).sort_values(by='Giá', ascending=False)
+            group_dt['SL'] = group_dt['SL'].apply(lambda x: f"{x:,.0f}")
+            group_dt['Giá'] = group_dt['Giá'].apply(lambda x: f"{x:,.0f}")
+            st.dataframe(group_dt)
+
+            st.subheader("🔍 Xem chi tiết theo hoạt chất")
+            selected_hoatchat = st.selectbox("Chọn hoạt chất", df_dm['Tên hoạt chất'].dropna().unique())
+            df_detail = df_dm[df_dm['Tên hoạt chất'] == selected_hoatchat]
+            st.dataframe(df_detail[['Tên hoạt chất', 'Nồng độ/Hàm lượng', 'Nhóm thuốc', 'Số lượng', 'Giá kế hoạch', 'Trị giá thầu']])
+        except Exception as e:
+            st.error(f"❌ Lỗi khi xử lý file mời thầu: {e}")
+
+elif menu == "Phân tích danh mục trúng thầu":
+    file_dm = st.file_uploader("Tải lên file Danh mục TRÚNG thầu của BV", type=["xls", "xlsx"], key="dmfile_trung")
+    if file_dm:
+        try:
+            df_dm = read_excel_with_auto_header(file_dm)
+            df_dm = standardize_column_names(df_dm)
+            df_dm['Nhóm thuốc chuẩn'] = df_dm['Nhóm thuốc'].astype(str).str.extract(r'(\d)$')[0]
+            df_dm['Trị giá thầu'] = df_dm['Số lượng'] * df_dm['Giá dự thầu']
+
+            st.subheader("📊 Top 20 Nhà thầu trúng thầu theo trị giá")
+            if 'Nhà thầu trúng thầu' in df_dm.columns:
+                top_nt = df_dm.groupby('Nhà thầu trúng thầu')['Trị giá thầu'].sum().sort_values(ascending=False).head(20)
+                top_nt = top_nt.apply(lambda x: f"{x:,.0f}")
+                st.dataframe(top_nt)
+
+            st.subheader("📌 Phân nhóm điều trị")
+            def classify_hoatchat(hc):
+                hc = str(hc).lower()
+                if any(x in hc for x in ['cef','peni','mycin','levo']): return 'Kháng sinh'
+                elif any(x in hc for x in ['losartan','amlodipin','pril','bisoprolol','clopidogrel','atorvastatin','trimetazidin']): return 'Tim mạch'
+                elif any(x in hc for x in ['metformin','insulin']): return 'Đái tháo đường'
+                elif any(x in hc for x in ['paracetamol','ibu','meloxi','diclofenac','naproxen','aspirin']): return 'Giảm đau'
+                elif any(x in hc for x in ['pantoprazol','omeprazol','rabeprazol','ranitidin','domperidon']): return 'Tiêu hóa'
+                elif any(x in hc for x in ['cisplatin','doxo']): return 'Ung thư'
+                else: return 'Khác'
+            df_dm['Nhóm điều trị'] = df_dm['Tên hoạt chất'].apply(classify_hoatchat)
+            st.dataframe(df_dm[['Tên hoạt chất', 'Nhóm điều trị', 'Trị giá thầu']].head(20))
+
+        except Exception as e:
+            st.error(f"❌ Lỗi khi xử lý file trúng thầu: {e}")
+
     file_dm = st.file_uploader("Tải lên file Danh mục mời thầu của BV", type=["xls", "xlsx"], key="dmfile")
 
     if file_dm:
