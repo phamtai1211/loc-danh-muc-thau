@@ -221,7 +221,8 @@ elif menu == "Phân tích danh mục trúng thầu":
         except Exception as e:
             st.error(f"❌ Lỗi khi xử lý file trúng thầu: {e}")
 
-    file_dm = 
+file_dm = st.file_uploader("📥 Tải file danh mục...", type=["xls", "xlsx"])
+
 
     if file_dm:
         try:
