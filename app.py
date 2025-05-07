@@ -223,8 +223,10 @@ elif menu == "Phân tích danh mục trúng thầu":
 
 file_dm = st.file_uploader("📥 Tải file danh mục...", type=["xls", "xlsx"])
 
+if file_dm:
+    df_dm = read_excel(file_dm)
+    # xử lý tiếp...
 
-    if file_dm:
         try:
             df_dm = read_excel_with_auto_header(file_dm)
             df_dm['Nhóm thuốc chuẩn'] = df_dm['Nhóm thuốc'].astype(str).str.extract(r'(\d)$')[0]
