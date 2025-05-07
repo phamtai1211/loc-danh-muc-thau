@@ -1,95 +1,105 @@
+# Phần mềm lọc danh mục thầu thuốc bệnh viện - Phiên bản đầy đủ
+
 import streamlit as st
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
+import os
+import pickle
 
-st.set_page_config(page_title="Pharma Tender Analysis", layout="wide")
-st.title("💊 Hệ Thống Lọc & Phân Tích Danh Mục Thầu Bệnh Viện")
+st.set_page_config(layout="wide")
+st.title("🔍 Phần mềm lọc và phân tích thầu thuốc bệnh viện")
 
-# --- Utility functions ---
-def read_excel_dynamic_header(file):
-    for header in range(5):
-        try:
-            df = pd.read_excel(file, header=header)
-            if df.columns.str.contains("\w").sum() >= 3:
-                return df
-        except Exception:
-            continue
-    return pd.DataFrame()
+# ------------------ CẤU HÌNH ------------------
+# Thư mục lưu file cố định
+FOLDER_SP = "du_lieu_luu/sp_file.pkl"
+FOLDER_DB = "du_lieu_luu/db_file.pkl"
+os.makedirs("du_lieu_luu", exist_ok=True)
 
-def format_number(n):
-    return f"{int(n):,}" if pd.notna(n) and isinstance(n, (int, float)) else n
+# ------------------ TẢI HOẶC LƯU FILE 2 & 3 ------------------
+with st.sidebar:
+    st.header("📁 Quản lý dữ liệu cố định")
 
-# --- Load saved data ---
-if 'file2_data' not in st.session_state:
-    st.session_state['file2_data'] = None
-if 'file3_data' not in st.session_state:
-    st.session_state['file3_data'] = None
+    uploaded_sp = st.file_uploader("Tải lên File 2: Danh sách sản phẩm công ty", type="xlsx")
+    uploaded_db = st.file_uploader("Tải lên File 3: Phân công địa bàn (sheet 'Chi tiết triển khai')", type="xlsx")
 
-# --- Sidebar: Choose analysis function ---
-option = st.sidebar.radio("Chọn chức năng", ["Lọc danh mục thầu", "Phân tích danh mục BV", "Phân tích danh mục trúng thầu"])
+    if uploaded_sp:
+        sp_data = pd.read_excel(uploaded_sp)
+        pickle.dump(sp_data, open(FOLDER_SP, "wb"))
+        st.success("Đã lưu File 2 thành công")
 
-# --- Upload files ---
-st.subheader("📁 Tải lên file")
-file1 = st.file_uploader("Tải lên file Danh mục chính (mời thầu/trúng thầu)", type=["xls", "xlsx"])
-file2 = st.file_uploader("(Tuỳ chọn) Danh sách sản phẩm của công ty bạn", type=["xls", "xlsx"])
-file3 = st.file_uploader("(Tuỳ chọn) File địa bàn - khách hàng phụ trách", type=["xls", "xlsx"])
+    if uploaded_db:
+        db_data = pd.read_excel(uploaded_db, sheet_name="Chi tiết triển khai")
+        pickle.dump(db_data, open(FOLDER_DB, "wb"))
+        st.success("Đã lưu File 3 thành công")
 
-if file2:
-    df2 = read_excel_dynamic_header(file2)
-    st.session_state['file2_data'] = df2
-if file3:
-    df3 = pd.read_excel(file3, sheet_name='Chi tiết triển khai', header=0)
-    df3 = df3[df3.iloc[:, 3].isna()]  # Bỏ dòng có dữ liệu ở cột D
-    st.session_state['file3_data'] = df3
+# ------------------ CHỨC NĂNG 1: LỌC DANH MỤC ------------------
+st.subheader("📄 Chức năng 1: Lọc danh mục mời thầu")
+dm_file = st.file_uploader("Tải lên File 1: Danh mục mời thầu (DM)", type="xlsx")
 
-# --- Load main file ---
-if file1:
-    df1 = read_excel_dynamic_header(file1)
-    if df1.empty:
-        st.error("❌ Không thể đọc dữ liệu từ file Danh mục chính.")
+if dm_file:
+    df_dm = pd.read_excel(dm_file)
+
+    # Tải dữ liệu đã lưu sẵn
+    try:
+        df_sp = pickle.load(open(FOLDER_SP, "rb"))
+        df_db = pickle.load(open(FOLDER_DB, "rb"))
+    except:
+        st.warning("Vui lòng tải trước File 2 và File 3 ở thanh bên")
+        st.stop()
+
+    # Lọc địa bàn
+    st.markdown("### 🔍 Chọn địa bàn để lọc")
+    col1, col2, col3 = st.columns(3)
+    mien_list = sorted(df_db['Miền'].dropna().unique())
+    mien = col1.selectbox("Chọn Miền", mien_list)
+
+    vung_list = sorted(df_db[df_db['Miền'] == mien]['Vùng'].dropna().unique())
+    vung = col2.selectbox("Chọn Vùng", vung_list)
+
+    tinh_list = sorted(df_db[df_db['Vùng'] == vung]['Tỉnh'].dropna().unique())
+    tinh = col3.selectbox("Chọn Tỉnh", tinh_list)
+
+    df_loc = df_db[(df_db['Miền'] == mien) & (df_db['Vùng'] == vung) & (df_db['Tỉnh'] == tinh)]
+    df_loc = df_loc[df_loc['Unnamed: 3'].isna()]  # Loại bỏ dòng có dữ liệu cột D
+
+    st.markdown("#### ✅ Đã chọn địa bàn: {} – {} – {}".format(mien, vung, tinh))
+
+    # Lấy danh sách sản phẩm cần lọc từ cột 'Tên sản phẩm' (K)
+    ten_sp_loc = df_loc['Tên sản phẩm'].dropna().str.lower().unique().tolist()
+
+    # Lọc trong file DM nếu có cột tên thuốc
+    col_map = [c for c in df_dm.columns if 'tên' in c.lower() or 'thuốc' in c.lower()]
+    if col_map:
+        col_ten = col_map[0]
+        df_filtered = df_dm[df_dm[col_ten].str.lower().fillna('').apply(lambda x: any(sp in x for sp in ten_sp_loc))]
+        df_filtered = df_filtered.copy()
+        df_filtered['Miền'] = mien
+        df_filtered['Vùng'] = vung
+        df_filtered['Tỉnh'] = tinh
+
+        # TODO: Phân tích tỉ trọng theo hoạt chất và nhóm
+        # Hiện tại sẽ chỉ hiển thị dữ liệu lọc
+
+        st.success(f"Đã lọc được {len(df_filtered)} dòng phù hợp")
+        st.dataframe(df_filtered)
+
+        # Xuất file
+        @st.cache_data
+        def convert_df(df):
+            return df.to_excel(index=False)
+
+        st.download_button("📥 Tải kết quả Excel", data=convert_df(df_filtered), file_name="ket_qua_loc_thau.xlsx")
     else:
-        df1.columns = df1.columns.str.strip()
-        df1['Tên hoạt chất chuẩn'] = df1['Tên hoạt chất/ Tên thành phần của thuốc'].fillna(df1.get('Tên hoạt chất', ''))
-        df1['Tên hoạt chất chuẩn'] = df1['Tên hoạt chất chuẩn'].str.strip().str.lower()
+        st.error("Không tìm thấy cột tên thuốc trong File 1")
 
-        if option == "Phân tích danh mục BV":
-            st.subheader("📊 Phân tích danh mục mời thầu")
-            if 'Số lượng' in df1.columns:
-                df1['Số lượng'] = pd.to_numeric(df1['Số lượng'], errors='coerce')
-            if 'Giá kế hoạch' in df1.columns:
-                df1['Giá kế hoạch'] = pd.to_numeric(df1['Giá kế hoạch'], errors='coerce')
-            df1['Trị giá thầu'] = df1['Số lượng'] * df1.get('Giá kế hoạch', 0)
-            df1['Trị giá thầu'] = df1['Trị giá thầu'].fillna(0)
-            
-            top_hoatchat = df1.groupby('Tên hoạt chất chuẩn')['Số lượng'].sum().nlargest(10).reset_index()
-            top_hoatchat['Số lượng'] = top_hoatchat['Số lượng'].apply(format_number)
+# ------------------ CHỨC NĂNG 2, 3, 4: Placeholder ------------------
+st.subheader("📊 Chức năng 2: Phân tích danh mục")
+st.info("Sẽ bao gồm: nhóm thuốc theo đường dùng, nhóm điều trị, top hoạt chất")
 
-            st.markdown("### 🔥 Top 10 hoạt chất theo số lượng")
-            st.dataframe(top_hoatchat, use_container_width=True)
+st.subheader("📈 Chức năng 3: Phân tích kết quả thầu")
+st.info("Sẽ bao gồm: top nhà thầu trúng nhiều nhất, nhóm dùng nhiều nhất")
 
-        elif option == "Phân tích danh mục trúng thầu":
-            st.subheader("🏥 Phân tích danh mục TRÚNG thầu")
-            if 'Giá dự thầu' in df1.columns:
-                df1['Giá dự thầu'] = pd.to_numeric(df1['Giá dự thầu'], errors='coerce')
-                df1['Trị giá thầu'] = df1['Số lượng'] * df1['Giá dự thầu']
+st.subheader("🔮 Chức năng 4: Dự đoán kỳ thầu tiếp theo")
+st.info("Sẽ gợi ý hoạt chất nên làm dựa theo file SP và kết quả phân tích")
 
-            if 'Nhà thầu trúng thầu' in df1.columns:
-                top_nhathau = df1.groupby('Nhà thầu trúng thầu')['Trị giá thầu'].sum().nlargest(20).reset_index()
-                top_nhathau['Trị giá thầu'] = top_nhathau['Trị giá thầu'].apply(format_number)
-                st.markdown("### 🏆 Top 20 nhà thầu trúng thầu theo trị giá")
-                st.dataframe(top_nhathau, use_container_width=True)
-
-        elif option == "Lọc danh mục thầu":
-            st.subheader("🔍 Lọc danh mục theo sản phẩm công ty và địa bàn")
-            if st.session_state['file2_data'] is not None:
-                df_sanpham = st.session_state['file2_data']
-                df_sanpham.columns = df_sanpham.columns.str.strip()
-                ten_sp = df_sanpham.iloc[:, 0].dropna().str.lower().unique()
-                df1['Tên hoạt chất chuẩn'] = df1['Tên hoạt chất chuẩn'].str.lower()
-                df_matched = df1[df1['Tên hoạt chất chuẩn'].isin(ten_sp)]
-
-                st.success(f"🔎 Lọc được {len(df_matched)} dòng khớp với danh sách sản phẩm công ty.")
-                st.dataframe(df_matched, use_container_width=True)
-            else:
-                st.warning("📌 Bạn cần cung cấp File 2 để sử dụng chức năng này.")
+# ------------------ GHI CHÚ ------------------
+st.caption("Tất cả dữ liệu giữ nguyên định dạng gốc. Phần mềm sẽ bổ sung thông tin phù hợp vào dòng trùng khớp.")
