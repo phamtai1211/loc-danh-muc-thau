@@ -22,6 +22,10 @@ if file1 and file2 and file3:
             for col in keys:
                 df[col] = df[col].astype(str).str.strip().str.lower()
 
+        # Chuẩn hóa Nhóm thuốc: chỉ lấy ký tự cuối cùng nếu là số
+        for df in [df1, df2]:
+            df['Nhóm thuốc'] = df['Nhóm thuốc'].str.extract(r'(\d)$')[0]
+
         # Lọc thuốc có thể tham gia thầu
         merged_df = pd.merge(df1, df2[keys + ['Tên sản phẩm']], on=keys, how='inner')
 
