@@ -4,6 +4,21 @@ import pandas as pd
 import io
 
 
+def standardize_column_names(df):
+    rename_map = {}
+    for col in df.columns:
+        lower_col = str(col).strip().lower()
+        if ('hoạt chất' in lower_col or 'thành phần' in lower_col) and 'tên' in lower_col:
+            rename_map[col] = 'Tên hoạt chất'
+        elif 'nồng độ' in lower_col and 'hàm lượng' in lower_col:
+            rename_map[col] = 'Nồng độ/Hàm lượng'
+        elif 'nhóm' in lower_col:
+            rename_map[col] = 'Nhóm thuốc'
+    df = df.rename(columns=rename_map)
+    return df
+
+
+
 def read_excel_with_auto_header(uploaded_file):
     for i in range(5):
         df_try = pd.read_excel(uploaded_file, header=i)
@@ -48,8 +63,8 @@ if menu == "Lọc danh mục thầu":
             df2 = read_excel_with_auto_header(file2)
             df3 = read_excel_with_auto_header(file3)
 
-            df1 = standardize_columns(df1)
-            df2 = standardize_columns(df2)
+            df1 = standardize_column_names(df1)
+            df2 = standardize_column_names(df2)
 
             keys = ['Tên hoạt chất', 'Nồng độ/Hàm lượng', 'Nhóm thuốc']
             for df in [df1, df2]:
