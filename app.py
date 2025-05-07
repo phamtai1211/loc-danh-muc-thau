@@ -3,6 +3,23 @@ import streamlit as st
 import pandas as pd
 import io
 
+
+def read_excel_with_auto_header(uploaded_file):
+    for i in range(5):
+        df_try = pd.read_excel(uploaded_file, header=i)
+        cols = [str(c).lower() for c in df_try.columns]
+        if any("tên hoạt chất" in c or "tên thành phần" in c for c in cols):
+            df = pd.read_excel(uploaded_file, header=i)
+            break
+    else:
+        df = pd.read_excel(uploaded_file, header=0)
+    for col in df.columns:
+        if "tên hoạt chất" in col.lower() or "tên thành phần" in col.lower():
+            df.rename(columns={col: "Tên hoạt chất"}, inplace=True)
+            break
+    return df
+
+
 st.set_page_config(page_title="Lọc & Phân tích Thầu BV", layout="wide")
 st.title("📋 Hệ Thống Lọc & Phân Tích Danh Mục Thầu Bệnh Viện")
 
@@ -27,9 +44,9 @@ if menu == "Lọc danh mục thầu":
 
     if file1 and file2 and file3:
         try:
-            df1 = pd.read_excel(file1)
-            df2 = pd.read_excel(file2)
-            df3 = pd.read_excel(file3)
+            df1 = read_excel_with_auto_header(file1)
+            df2 = read_excel_with_auto_header(file2)
+            df3 = read_excel_with_auto_header(file3)
 
             df1 = standardize_columns(df1)
             df2 = standardize_columns(df2)
@@ -78,7 +95,7 @@ elif menu == "Phân tích danh mục BV":
 
     if file_dm:
         try:
-            df_dm = pd.read_excel(file_dm, sheet_name=0)
+            df_dm = read_excel_with_auto_header(file_dm)
             df_dm['Nhóm thuốc chuẩn'] = df_dm['Nhóm thuốc'].astype(str).str.extract(r'(\d)$')[0]
             df_dm['Trị giá thầu'] = df_dm['Số lượng'] * df_dm['Giá kế hoạch']
 
@@ -95,7 +112,7 @@ elif menu == "Phân tích danh mục BV":
             st.dataframe(duong_summary)
 
             st.subheader("🏅 Top 10 hoạt chất theo từng đường dùng")
-            for route in df_dm['Đường dùng'].dropna().unique():
+            for route in ['Uống', 'Tiêm']:
                 st.markdown(f"### 👉 {route}")
                 top_route = df_dm[df_dm['Đường dùng'] == route].groupby('Tên hoạt chất').agg(SL=('Số lượng', 'sum')).sort_values(by='SL', ascending=False).head(10)
                 top_route['SL'] = top_route['SL'].apply(lambda x: f"{x:,.0f}")
@@ -105,10 +122,10 @@ elif menu == "Phân tích danh mục BV":
             def classify_hoatchat(hc):
                 hc = str(hc).lower()
                 if any(x in hc for x in ['cef','peni','mycin','levo']): return 'Kháng sinh'
-                elif any(x in hc for x in ['losartan','amlodipin','pril']): return 'Tim mạch'
+                elif any(x in hc for x in ['losartan','amlodipin','pril','bisoprolol','clopidogrel','atorvastatin','trimetazidin']): return 'Tim mạch'
                 elif any(x in hc for x in ['metformin','insulin']): return 'Đái tháo đường'
-                elif any(x in hc for x in ['paracetamol','ibu','meloxi']): return 'Giảm đau'
-                elif any(x in hc for x in ['pantoprazol','omeprazol']): return 'Tiêu hóa'
+                elif any(x in hc for x in ['paracetamol','ibu','meloxi','diclofenac','naproxen','aspirin']): return 'Giảm đau'
+                elif any(x in hc for x in ['pantoprazol','omeprazol','rabeprazol','ranitidin','domperidon']): return 'Tiêu hóa'
                 elif any(x in hc for x in ['cisplatin','doxo']): return 'Ung thư'
                 else: return 'Khác'
 
