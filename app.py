@@ -1,276 +1,141 @@
-
 import streamlit as st
 import pandas as pd
-import io
+import numpy as np
+import matplotlib.pyplot as plt
 
+st.set_page_config(page_title="Pharma Tender Analysis", layout="wide")
+st.title("💊 Hệ Thống Lọc & Phân Tích Danh Mục Thầu Bệnh Viện")
 
-
-
-def standardize_column_names(df):
-    rename_map = {}
-    for col in df.columns:
-        lower_col = str(col).strip().lower()
-        if ('hoạt chất' in lower_col or 'thành phần' in lower_col) and 'tên' in lower_col:
-            rename_map[col] = 'Tên hoạt chất'
-        elif 'nồng độ' in lower_col and 'hàm lượng' in lower_col:
-            rename_map[col] = 'Nồng độ/Hàm lượng'
-        elif 'nhóm' in lower_col:
-            rename_map[col] = 'Nhóm thuốc'
-        elif 'giá' in lower_col and 'hoạch' in lower_col:
-            rename_map[col] = 'Giá kế hoạch'
-        elif 'giá' in lower_col and ('dự' in lower_col or 'trúng' in lower_col or 'thực tế' in lower_col):
-            rename_map[col] = 'Giá dự thầu'
-    df = df.rename(columns=rename_map)
-    return df
-    for col in df.columns:
-        lower_col = str(col).strip().lower()
-        if ('hoạt chất' in lower_col or 'thành phần' in lower_col) and 'tên' in lower_col:
-            rename_map[col] = 'Tên hoạt chất'
-        elif 'nồng độ' in lower_col and 'hàm lượng' in lower_col:
-            rename_map[col] = 'Nồng độ/Hàm lượng'
-        elif 'nhóm' in lower_col:
-            rename_map[col] = 'Nhóm thuốc'
-        elif 'giá' in lower_col and 'hoạch' in lower_col:
-            rename_map[col] = 'Giá kế hoạch'
-        elif 'giá' in lower_col and 'dự' in lower_col:
-            rename_map[col] = 'Giá kế hoạch'
-        elif 'giá' in lower_col and 'tạm' in lower_col:
-            rename_map[col] = 'Giá kế hoạch'
-    df = df.rename(columns=rename_map)
-    return df
-    for col in df.columns:
-        lower_col = str(col).strip().lower()
-        if ('hoạt chất' in lower_col or 'thành phần' in lower_col) and 'tên' in lower_col:
-            rename_map[col] = 'Tên hoạt chất'
-        elif 'nồng độ' in lower_col and 'hàm lượng' in lower_col:
-            rename_map[col] = 'Nồng độ/Hàm lượng'
-        elif 'nhóm' in lower_col:
-            rename_map[col] = 'Nhóm thuốc'
-    df = df.rename(columns=rename_map)
-    return df
-
-
-
-def read_excel_with_auto_header(uploaded_file):
-    for i in range(5):
-        df_try = pd.read_excel(uploaded_file, header=i)
-        cols = [str(c).lower() for c in df_try.columns]
-        if any("tên hoạt chất" in c or "tên thành phần" in c for c in cols):
-            df = pd.read_excel(uploaded_file, header=i)
-            break
-    else:
-        df = pd.read_excel(uploaded_file, header=0)
-    for col in df.columns:
-        if "tên hoạt chất" in col.lower() or "tên thành phần" in col.lower():
-            df.rename(columns={col: "Tên hoạt chất"}, inplace=True)
-            break
-    return df
-
-
-st.set_page_config(page_title="Lọc & Phân tích Thầu BV", layout="wide")
-st.title("📋 Hệ Thống Lọc & Phân Tích Danh Mục Thầu Bệnh Viện")
-
-menu = st.sidebar.radio("Chọn chức năng", ["Lọc danh mục thầu", "Phân tích danh mục mời thầu", "Phân tích danh mục trúng thầu"])
-
-if menu == "Lọc danh mục thầu":
-    file1 = st.file_uploader("Tải lên file Danh mục thầu của Bệnh viện", type=["xls", "xlsx"], key="file1")
-    file2 = st.file_uploader("Tải lên file Danh mục sản phẩm nội bộ", type=["xls", "xlsx"], key="file2")
-    file3 = st.file_uploader("Tải lên file Thông tin triển khai", type=["xls", "xlsx"], key="file3")
-
-    def standardize_columns(df):
-        col_map = {}
-        for col in df.columns:
-            name = col.strip().lower()
-            if 'tên hoạt chất' in name:
-                col_map[col] = 'Tên hoạt chất'
-            elif 'nồng độ' in name and 'hàm lượng' in name:
-                col_map[col] = 'Nồng độ/Hàm lượng'
-            elif 'nhóm' in name:
-                col_map[col] = 'Nhóm thuốc'
-        return df.rename(columns=col_map)
-
-    if file1 and file2 and file3:
+# -------------------- HÀM TIỆN ÍCH --------------------
+@st.cache_data
+def read_excel_dynamic_header(file):
+    for header in range(5):
         try:
-            df1 = read_excel_with_auto_header(file1)
-            df2 = read_excel_with_auto_header(file2)
-            df3 = read_excel_with_auto_header(file3)
+            df = pd.read_excel(file, header=header)
+            if df.columns.str.contains("\w").sum() >= 3:
+                return df
+        except Exception:
+            continue
+    return pd.DataFrame()
 
-            df1 = standardize_column_names(df1)
-            df2 = standardize_column_names(df2)
+def format_number(n):
+    try:
+        return f"{int(n):,}"
+    except:
+        return n
 
-            keys = ['Tên hoạt chất', 'Nồng độ/Hàm lượng', 'Nhóm thuốc']
-            for df in [df1, df2]:
-                for col in keys:
-                    df[col] = df[col].astype(str).str.strip().str.lower()
-            for df in [df1, df2]:
-                df['Nhóm thuốc'] = df['Nhóm thuốc'].str.extract(r'(\d)$')[0]
+def extract_group(value):
+    if pd.isna(value): return ""
+    value = str(value).strip().lower()
+    for g in ["1", "2", "3", "4", "5"]:
+        if g in value:
+            return f"Nhóm {g}"
+    return "Khác"
 
-            merged_df = pd.merge(df1, df2[keys + ['Tên sản phẩm']], on=keys, how='inner')
-            df3['Tên sản phẩm'] = df3['Tên sản phẩm'].astype(str).str.strip().str.lower()
-            merged_df['Tên sản phẩm'] = merged_df['Tên sản phẩm'].astype(str).str.strip().str.lower()
-            final_df = pd.merge(merged_df, df3, on='Tên sản phẩm', how='left')
+# -------------------- KHỞI TẠO SESSION --------------------
+if 'file2_data' not in st.session_state:
+    st.session_state['file2_data'] = None
+if 'file3_data' not in st.session_state:
+    st.session_state['file3_data'] = None
 
-            tong_theo_hoatchat_hamluong = (
-                df1.groupby(['Tên hoạt chất', 'Nồng độ/Hàm lượng'])['Số lượng'].sum().reset_index()
-                .rename(columns={'Số lượng': 'Tổng SL cùng hoạt chất-hàm lượng'})
-            )
-            final_df = pd.merge(final_df, tong_theo_hoatchat_hamluong, on=['Tên hoạt chất', 'Nồng độ/Hàm lượng'], how='left')
-            final_df['Tỉ trọng nhóm (%)'] = round(final_df['Số lượng'] / final_df['Tổng SL cùng hoạt chất-hàm lượng'] * 100, 2)
+# -------------------- TẢI FILE --------------------
+st.sidebar.header("🔧 Chọn chức năng")
+option = st.sidebar.radio("", ["Lọc danh mục thầu", "Phân tích danh mục BV", "Phân tích danh mục trúng thầu"])
 
-            for col in ['Số lượng', 'Giá kế hoạch', 'Tổng SL cùng hoạt chất-hàm lượng']:
-                if col in final_df.columns:
-                    final_df[col] = final_df[col].apply(lambda x: f"{x:,.0f}" if pd.notnull(x) else x)
-            if 'Tỉ trọng nhóm (%)' in final_df.columns:
-                final_df['Tỉ trọng nhóm (%)'] = final_df['Tỉ trọng nhóm (%)'].apply(lambda x: f"{x:.2f}%")
+file1 = st.file_uploader("📂 File 1: Danh mục chính (mời/trúng thầu)", type=["xls", "xlsx"])
+file2 = st.file_uploader("📂 File 2: Sản phẩm nội bộ công ty", type=["xls", "xlsx"])
+file3 = st.file_uploader("📂 File 3: Địa bàn & Khách hàng phụ trách", type=["xls", "xlsx"])
 
-            st.success(f"✅ Lọc được {len(final_df)} dòng phù hợp")
-            st.dataframe(final_df)
+if file2:
+    df2 = read_excel_dynamic_header(file2)
+    st.session_state['file2_data'] = df2
+if file3:
+    df3 = pd.read_excel(file3, sheet_name='Chi tiết triển khai', header=0)
+    df3 = df3[df3.iloc[:, 3].isna()]
+    st.session_state['file3_data'] = df3
 
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                final_df.to_excel(writer, index=False, sheet_name='Kết quả lọc')
-            output.seek(0)
-            st.download_button("📥 Tải Excel kết quả lọc", data=output, file_name="danh_muc_tham_du.xlsx")
+# -------------------- ĐỌC FILE CHÍNH --------------------
+if file1:
+    df1 = read_excel_dynamic_header(file1)
+    df1.columns = df1.columns.str.strip()
+    if 'Tên hoạt chất' not in df1.columns:
+        match_col = [col for col in df1.columns if "tên hoạt chất" in col.lower() or "thành phần" in col.lower()]
+        if match_col:
+            df1.rename(columns={match_col[0]: 'Tên hoạt chất'}, inplace=True)
+    if 'Nồng độ/hàm lượng' not in df1.columns:
+        match_col = [col for col in df1.columns if "hàm lượng" in col.lower()]
+        if match_col:
+            df1.rename(columns={match_col[0]: 'Nồng độ/hàm lượng'}, inplace=True)
+    if 'Nhóm thuốc' not in df1.columns:
+        match_col = [col for col in df1.columns if "nhóm" in col.lower()]
+        if match_col:
+            df1.rename(columns={match_col[0]: 'Nhóm thuốc'}, inplace=True)
 
-        except Exception as e:
-            st.error(f"❌ Lỗi: {e}")
-    else:
-        st.info("⬆️ Tải đủ cả 3 file để lọc dữ liệu")
+    df1['Nhóm thuốc'] = df1['Nhóm thuốc'].apply(extract_group)
+    df1['Số lượng'] = pd.to_numeric(df1.get('Số lượng', 0), errors='coerce')
 
+    if option == "Phân tích danh mục BV":
+        st.header("📊 Phân tích Danh mục mời thầu")
+        df1['Giá kế hoạch'] = pd.to_numeric(df1.get('Giá kế hoạch', 0), errors='coerce')
+        df1['Trị giá thầu'] = df1['Số lượng'] * df1['Giá kế hoạch']
 
-elif menu == "Phân tích danh mục mời thầu":
-    file_dm = st.file_uploader("Tải lên file Danh mục MỜI thầu của BV", type=["xls", "xlsx"], key="dmfile_moi")
-    if file_dm:
-        try:
-            df_dm = read_excel_with_auto_header(file_dm)
-            df_dm = standardize_column_names(df_dm)
-            df_dm['Nhóm thuốc chuẩn'] = df_dm['Nhóm thuốc'].astype(str).str.extract(r'(\d)$')[0]
-            df_dm['Trị giá thầu'] = df_dm['Số lượng'] * df_dm['Giá kế hoạch']
+        top10 = df1.groupby('Tên hoạt chất')['Số lượng'].sum().nlargest(10).reset_index()
+        top10['Số lượng'] = top10['Số lượng'].apply(format_number)
+        st.subheader("🔥 Top 10 hoạt chất theo số lượng")
+        st.dataframe(top10)
 
-            st.subheader("📊 Thống kê nhóm thuốc")
-            nhom_summary = df_dm.groupby('Nhóm thuốc chuẩn').agg(SL=('Số lượng','sum'), Giá=('Trị giá thầu','sum'))
-            nhom_summary['SL'] = nhom_summary['SL'].apply(lambda x: f"{x:,.0f}")
-            nhom_summary['Giá'] = nhom_summary['Giá'].apply(lambda x: f"{x:,.0f}")
-            st.dataframe(nhom_summary)
+        group_ratio = df1.groupby('Nhóm thuốc')['Số lượng'].sum()
+        total_qty = group_ratio.sum()
+        df_ratio = (group_ratio / total_qty * 100).round(2).reset_index(name='% Số lượng')
+        st.subheader("📌 Tỉ trọng theo Nhóm thuốc")
+        st.dataframe(df_ratio)
 
-            st.subheader("🚀 Thống kê theo đường dùng")
-            duong_summary = df_dm.groupby('Đường dùng').agg(SL=('Số lượng','sum'), Giá=('Trị giá thầu','sum'))
-            duong_summary['SL'] = duong_summary['SL'].apply(lambda x: f"{x:,.0f}")
-            duong_summary['Giá'] = duong_summary['Giá'].apply(lambda x: f"{x:,.0f}")
-            st.dataframe(duong_summary)
+    elif option == "Phân tích danh mục trúng thầu":
+        st.header("🏥 Phân tích Danh mục TRÚNG thầu")
+        df1['Giá dự thầu'] = pd.to_numeric(df1.get('Giá dự thầu', 0), errors='coerce')
+        df1['Trị giá thầu'] = df1['Số lượng'] * df1['Giá dự thầu']
+        top20 = df1.groupby('Nhà thầu trúng thầu')['Trị giá thầu'].sum().nlargest(20).reset_index()
+        top20['Trị giá thầu'] = top20['Trị giá thầu'].apply(format_number)
+        st.dataframe(top20)
 
-            st.subheader("🏅 Top 10 hoạt chất theo từng đường dùng")
-            for route in ['Uống', 'Tiêm']:
-                st.markdown(f"### 👉 {route}")
-                top_route = df_dm[df_dm['Đường dùng'] == route].groupby('Tên hoạt chất').agg(SL=('Số lượng', 'sum')).sort_values(by='SL', ascending=False).head(10)
-                top_route['SL'] = top_route['SL'].apply(lambda x: f"{x:,.0f}")
-                st.dataframe(top_route)
+    elif option == "Lọc danh mục thầu":
+        st.header("🔍 Lọc Danh mục có thể tham gia")
+        df2 = st.session_state['file2_data']
+        df3 = st.session_state['file3_data']
 
-            st.subheader("📌 Phân nhóm điều trị")
-            def classify_hoatchat(hc):
-                hc = str(hc).lower()
-                if any(x in hc for x in ['cef','peni','mycin','levo']): return 'Kháng sinh'
-                elif any(x in hc for x in ['losartan','amlodipin','pril','bisoprolol','clopidogrel','atorvastatin','trimetazidin']): return 'Tim mạch'
-                elif any(x in hc for x in ['metformin','insulin']): return 'Đái tháo đường'
-                elif any(x in hc for x in ['paracetamol','ibu','meloxi','diclofenac','naproxen','aspirin']): return 'Giảm đau'
-                elif any(x in hc for x in ['pantoprazol','omeprazol','rabeprazol','ranitidin','domperidon']): return 'Tiêu hóa'
-                elif any(x in hc for x in ['cisplatin','doxo']): return 'Ung thư'
-                else: return 'Khác'
+        if df2 is not None:
+            df2.columns = df2.columns.str.strip()
+            if 'Tên hoạt chất' not in df2.columns:
+                df2.rename(columns={df2.columns[0]: 'Tên hoạt chất'}, inplace=True)
+            df_merged = df1.merge(df2[['Tên hoạt chất']], on='Tên hoạt chất', how='left', indicator=True)
+            df_result = df_merged[df_merged['_merge'] == 'both'].copy()
+            df_result.drop(columns=['_merge'], inplace=True)
 
-            df_dm['Nhóm điều trị'] = df_dm['Tên hoạt chất'].apply(classify_hoatchat)
-            group_dt = df_dm.groupby('Nhóm điều trị').agg(SL=('Số lượng','sum'), Giá=('Trị giá thầu','sum')).sort_values(by='Giá', ascending=False)
-            group_dt['SL'] = group_dt['SL'].apply(lambda x: f"{x:,.0f}")
-            group_dt['Giá'] = group_dt['Giá'].apply(lambda x: f"{x:,.0f}")
-            st.dataframe(group_dt)
+            if df3 is not None:
+                df3.columns = df3.columns.str.strip()
+                df3.rename(columns={
+                    df3.columns[0]: 'Miền',
+                    df3.columns[1]: 'Vùng',
+                    df3.columns[2]: 'Tỉnh',
+                    df3.columns[4]: 'BV/SYT',
+                    df3.columns[5]: 'Địa bàn',
+                    df3.columns[10]: 'Tên sản phẩm',
+                    df3.columns[38]: 'Tên Khách hàng phụ trách'
+                }, inplace=True)
 
-            st.subheader("🔍 Xem chi tiết theo hoạt chất")
-            selected_hoatchat = st.selectbox("Chọn hoạt chất", df_dm['Tên hoạt chất'].dropna().unique())
-            df_detail = df_dm[df_dm['Tên hoạt chất'] == selected_hoatchat]
-            st.dataframe(df_detail[['Tên hoạt chất', 'Nồng độ/Hàm lượng', 'Nhóm thuốc', 'Số lượng', 'Giá kế hoạch', 'Trị giá thầu']])
-        except Exception as e:
-            st.error(f"❌ Lỗi khi xử lý file mời thầu: {e}")
+                # Giao diện lọc theo Miền - Vùng - Tỉnh - BV
+                mien = st.selectbox("Chọn Miền", df3['Miền'].dropna().unique())
+                vung = st.selectbox("Chọn Vùng", df3[df3['Miền'] == mien]['Vùng'].dropna().unique())
+                tinh = st.selectbox("Chọn Tỉnh", df3[df3['Vùng'] == vung]['Tỉnh'].dropna().unique())
+                bvsyt = st.selectbox("Chọn SYT/BV", df3[df3['Tỉnh'] == tinh]['BV/SYT'].dropna().unique())
 
-elif menu == "Phân tích danh mục trúng thầu":
-    file_dm = st.file_uploader("📥 Tải lên file Danh mục TRÚNG thầu của BV", type=["xls", "xlsx"], key="dmfile_trung")
-    if file_dm:
-        try:
-            df_dm = read_excel_with_auto_header(file_dm)
-            df_dm = standardize_column_names(df_dm)
-            df_dm['Nhóm thuốc chuẩn'] = df_dm['Nhóm thuốc'].astype(str).str.extract(r'(\d)$')[0]
-            df_dm['Trị giá thầu'] = df_dm['Số lượng'] * df_dm['Giá dự thầu']
-
-            st.subheader("📊 Top 20 Nhà thầu trúng thầu theo trị giá")
-            if 'Nhà thầu trúng thầu' in df_dm.columns:
-                top_nt = df_dm.groupby('Nhà thầu trúng thầu')['Trị giá thầu'].sum().sort_values(ascending=False).head(20)
-                top_nt = top_nt.apply(lambda x: f"{x:,.0f}")
-                st.dataframe(top_nt)
-
-            st.subheader("📌 Phân nhóm điều trị")
-            def classify_hoatchat(hc):
-                hc = str(hc).lower()
-                if any(x in hc for x in ['cef','peni','mycin','levo']): return 'Kháng sinh'
-                elif any(x in hc for x in ['losartan','amlodipin','pril','bisoprolol','clopidogrel','atorvastatin','trimetazidin']): return 'Tim mạch'
-                elif any(x in hc for x in ['metformin','insulin']): return 'Đái tháo đường'
-                elif any(x in hc for x in ['paracetamol','ibu','meloxi','diclofenac','naproxen','aspirin']): return 'Giảm đau'
-                elif any(x in hc for x in ['pantoprazol','omeprazol','rabeprazol','ranitidin','domperidon']): return 'Tiêu hóa'
-                elif any(x in hc for x in ['cisplatin','doxo']): return 'Ung thư'
-                else: return 'Khác'
-            df_dm['Nhóm điều trị'] = df_dm['Tên hoạt chất'].apply(classify_hoatchat)
-            st.dataframe(df_dm[['Tên hoạt chất', 'Nhóm điều trị', 'Trị giá thầu']].head(20))
-
-        except Exception as e:
-            st.error(f"❌ Lỗi khi xử lý file trúng thầu: {e}")
-
-    file_dm = 
-
-    if file_dm:
-        try:
-            df_dm = read_excel_with_auto_header(file_dm)
-            df_dm['Nhóm thuốc chuẩn'] = df_dm['Nhóm thuốc'].astype(str).str.extract(r'(\d)$')[0]
-            df_dm['Trị giá thầu'] = df_dm['Số lượng'] * df_dm['Giá kế hoạch']
-
-            st.subheader("📊 Thống kê nhóm thuốc")
-            nhom_summary = df_dm.groupby('Nhóm thuốc chuẩn').agg(SL=('Số lượng','sum'), Giá=('Trị giá thầu','sum'))
-            nhom_summary['SL'] = nhom_summary['SL'].apply(lambda x: f"{x:,.0f}")
-            nhom_summary['Giá'] = nhom_summary['Giá'].apply(lambda x: f"{x:,.0f}")
-            st.dataframe(nhom_summary)
-
-            st.subheader("🚀 Thống kê theo đường dùng")
-            duong_summary = df_dm.groupby('Đường dùng').agg(SL=('Số lượng','sum'), Giá=('Trị giá thầu','sum'))
-            duong_summary['SL'] = duong_summary['SL'].apply(lambda x: f"{x:,.0f}")
-            duong_summary['Giá'] = duong_summary['Giá'].apply(lambda x: f"{x:,.0f}")
-            st.dataframe(duong_summary)
-
-            st.subheader("🏅 Top 10 hoạt chất theo từng đường dùng")
-            for route in ['Uống', 'Tiêm']:
-                st.markdown(f"### 👉 {route}")
-                top_route = df_dm[df_dm['Đường dùng'] == route].groupby('Tên hoạt chất').agg(SL=('Số lượng', 'sum')).sort_values(by='SL', ascending=False).head(10)
-                top_route['SL'] = top_route['SL'].apply(lambda x: f"{x:,.0f}")
-                st.dataframe(top_route)
-
-            st.subheader("📌 Phân nhóm điều trị")
-            def classify_hoatchat(hc):
-                hc = str(hc).lower()
-                if any(x in hc for x in ['cef','peni','mycin','levo']): return 'Kháng sinh'
-                elif any(x in hc for x in ['losartan','amlodipin','pril','bisoprolol','clopidogrel','atorvastatin','trimetazidin']): return 'Tim mạch'
-                elif any(x in hc for x in ['metformin','insulin']): return 'Đái tháo đường'
-                elif any(x in hc for x in ['paracetamol','ibu','meloxi','diclofenac','naproxen','aspirin']): return 'Giảm đau'
-                elif any(x in hc for x in ['pantoprazol','omeprazol','rabeprazol','ranitidin','domperidon']): return 'Tiêu hóa'
-                elif any(x in hc for x in ['cisplatin','doxo']): return 'Ung thư'
-                else: return 'Khác'
-
-            df_dm['Nhóm điều trị'] = df_dm['Tên hoạt chất'].apply(classify_hoatchat)
-            group_dt = df_dm.groupby('Nhóm điều trị').agg(SL=('Số lượng','sum'), Giá=('Trị giá thầu','sum')).sort_values(by='Giá', ascending=False)
-            group_dt['SL'] = group_dt['SL'].apply(lambda x: f"{x:,.0f}")
-            group_dt['Giá'] = group_dt['Giá'].apply(lambda x: f"{x:,.0f}")
-            st.dataframe(group_dt)
-
-            st.subheader("🔍 Xem chi tiết theo hoạt chất")
-            selected_hoatchat = st.selectbox("Chọn hoạt chất", df_dm['Tên hoạt chất'].dropna().unique())
-            df_detail = df_dm[df_dm['Tên hoạt chất'] == selected_hoatchat]
-            st.dataframe(df_detail[['Tên hoạt chất', 'Nồng độ/Hàm lượng', 'Nhóm thuốc', 'Số lượng', 'Giá kế hoạch', 'Trị giá thầu']])
-
-        except Exception as e:
-            st.error(f"❌ Lỗi khi xử lý: {e}")
-    else:
-        st.info("⬆️ Tải lên file danh mục thầu bệnh viện để bắt đầu phân tích.")
+                df3_filtered = df3[df3['BV/SYT'] == bvsyt]
+                df_final = df_result.merge(df3_filtered[['Tên sản phẩm', 'Địa bàn', 'Tên Khách hàng phụ trách']],
+                                           left_on='Tên hoạt chất', right_on='Tên sản phẩm', how='left')
+                st.success(f"✅ Lọc được {len(df_final)} dòng phù hợp tại {bvsyt}")
+                st.dataframe(df_final)
+            else:
+                st.warning("⚠️ Bạn chưa tải File 3 nên không có thông tin địa bàn & khách hàng phụ trách.")
+                st.dataframe(df_result)
+        else:
+            st.warning("⚠️ Vui lòng tải File 2 (sản phẩm công ty) để sử dụng chức năng lọc.")
