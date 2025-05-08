@@ -131,7 +131,7 @@ if file1:
 
                 df3_filtered = df3[df3['BV/SYT'] == bvsyt]
                 df3_filtered_unique = df3_filtered[['Tên sản phẩm', 'Địa bàn', 'Tên Khách hàng phụ trách']].drop_duplicates(subset=['Tên sản phẩm'])
-                                df_final = df_result.merge(df3_filtered_unique, left_on='Tên hoạt chất', right_on='Tên sản phẩm', how='left')
+                df_final = df_result.merge(df3_filtered_unique, left_on='Tên hoạt chất', right_on='Tên sản phẩm', how='left')
 
                 st.success(f"✅ Lọc được {len(df_final)} dòng phù hợp tại {bvsyt}")
                 st.dataframe(df_final)
