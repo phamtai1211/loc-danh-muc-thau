@@ -1,113 +1,116 @@
+# loc_thau_thuoc_app.py
+
 import streamlit as st
 import pandas as pd
 import numpy as np
+from io import BytesIO
+import re
 
-st.set_page_config(layout="wide")
-st.title("🧪 Hệ Thống Lọc & Phân Tích Danh Mục Thầu Bệnh Viện")
+st.set_page_config(page_title="Lọc danh mục thầu thuốc bệnh viện", layout="wide")
+st.title("Lọc danh mục thầu thuốc bệnh viện")
 
-# ========== FUNCTION ==========
-def standardize_column_names(df):
-    col_map = {}
-    for col in df.columns:
-        lower_col = col.lower()
-        if "hoạt chất" in lower_col:
-            col_map[col] = "Tên hoạt chất"
-        elif "hàm lượng" in lower_col or "nồng độ" in lower_col:
-            col_map[col] = "Nồng độ/Hàm lượng"
-        elif "đường dùng" in lower_col:
-            col_map[col] = "Đường dùng"
-        elif "dạng bào chế" in lower_col:
-            col_map[col] = "Dạng bào chế"
-        elif "đơn vị" in lower_col and "tính" in lower_col:
-            col_map[col] = "Đơn vị tính"
-        elif "số lượng" in lower_col:
-            col_map[col] = "Số lượng"
-        elif "giá kế hoạch" in lower_col:
-            col_map[col] = "Giá kế hoạch"
-        elif "giá dự thầu" in lower_col:
-            col_map[col] = "Giá dự thầu"
-        elif "tên sản phẩm" in lower_col:
-            col_map[col] = "Tên sản phẩm"
-        elif "nhóm" in lower_col and "thuốc" in lower_col:
-            col_map[col] = "Nhóm thuốc"
-        elif "tên miền" in lower_col:
-            col_map[col] = "Miền"
-        elif "tên vùng" in lower_col:
-            col_map[col] = "Vùng"
-        elif "tỉnh" in lower_col:
-            col_map[col] = "Tỉnh"
-        elif "bệnh viện" in lower_col or "sở y tế" in lower_col:
-            col_map[col] = "BV/SYT"
-        elif "tên sản phẩm" in lower_col:
-            col_map[col] = "Tên sản phẩm"
-        elif "tên khách hàng" in lower_col:
-            col_map[col] = "Tên khách hàng phụ trách"
-        elif "địa bàn" in lower_col:
-            col_map[col] = "Địa bàn"
-    df.rename(columns=col_map, inplace=True)
-    return df
+# ---------- Utilities ----------
+def normalize_colname(name):
+    name = name.lower().strip()
+    name = re.sub(r"[\s\-_/]+", " ", name)
+    return name
 
-# ========== FILE INPUT ==========
-st.markdown("#### 📁 File 1: Danh mục chính mời thầu (DM)")
-file1 = st.file_uploader("Tải lên file Danh mục mời thầu của BV", type=["xlsx"], key="file1")
+def fuzzy_find_column(columns, keywords):
+    columns_norm = {col: normalize_colname(col) for col in columns}
+    for key in keywords:
+        for col, norm in columns_norm.items():
+            if key in norm:
+                return col
+    return None
 
-st.markdown("#### 📁 File 2: Danh mục sản phẩm công ty")
-file2 = st.file_uploader("Tải lên file Danh mục sản phẩm nội bộ công ty", type=["xlsx"], key="file2")
+# ---------- File Uploads ----------
+st.sidebar.header("1. Tải các file dữ liệu")
+file2 = st.sidebar.file_uploader("Tải file 2 - Dữ liệu thuốc công ty", type="xlsx", key="f2")
+file3 = st.sidebar.file_uploader("Tải file 3 - File phân khai triển khai", type="xlsx", key="f3")
+file1 = st.sidebar.file_uploader("Tải file 1 - Danh mục thầu từ BV/SYT", type="xlsx", key="f1")
 
-st.markdown("#### 📁 File 3: Địa bàn & Khách hàng phụ trách")
-file3 = st.file_uploader("Tải lên file Thông tin triển khai (Địa bàn, khách hàng phụ trách)", type=["xlsx"], key="file3")
+# ---------- Read Files ----------
+data2, data3, data1_main = None, None, None
+if file2:
+    data2 = pd.read_excel(file2)
+if file3:
+    data3 = pd.read_excel(file3, sheet_name="Chi tiết triển khai")
 
-# ========== LOAD & CLEAN ==========
-if file1 and file2:
-    df1 = pd.read_excel(file1)
-    df2 = pd.read_excel(file2)
-    df1 = standardize_column_names(df1)
-    df2 = standardize_column_names(df2)
+# UI lựa chọn bệnh viện từ file 3
+if data3 is not None:
+    mien_list = sorted(data3["Miền"].dropna().unique())
+    mien = st.selectbox("Chọn Miền", mien_list)
+    vung_list = sorted(data3[data3["Miền"] == mien]["Vùng"].dropna().unique())
+    vung = st.selectbox("Chọn Vùng", vung_list)
+    tinh_list = sorted(data3[data3["Vùng"] == vung]["Tỉnh"].dropna().unique())
+    tinh = st.selectbox("Chọn Tỉnh", tinh_list)
+    bv_list = sorted(data3[data3["Tỉnh"] == tinh]["Bệnh viện/SYT"].dropna().unique())
+    bv = st.selectbox("Chọn Bệnh viện/SYT", bv_list)
 
-    # Nếu có file 3
-    if file3:
-        df3 = pd.read_excel(file3, sheet_name="Chi tiết triển khai", header=0)
-        df3 = standardize_column_names(df3)
-        df3 = df3[df3["BV/SYT"].notna() & ~df3["BV/SYT"].astype(str).str.strip().eq("")]
+# ---------- Xử lý File 1 ----------
+if file1:
+    sheet_all = pd.read_excel(file1, sheet_name=None)
+    selected_sheet = max(sheet_all.items(), key=lambda x: x[1].shape[1])[0]
+    data1 = sheet_all[selected_sheet].copy()
 
-        mien_list = df3["Miền"].dropna().unique().tolist()
-        mien = st.selectbox("Chọn Miền", mien_list)
+    # Tìm cột phù hợp theo key
+    col_hoatchat = fuzzy_find_column(data1.columns, ["hoat chat", "ten thanh phan"])
+    col_hamluong = fuzzy_find_column(data1.columns, ["ham luong", "nong do"])
+    col_nhom = fuzzy_find_column(data1.columns, ["nhom", "nhom thuoc"])
 
-        vung_list = df3[df3["Miền"] == mien]["Vùng"].dropna().unique().tolist()
-        vung = st.selectbox("Chọn Vùng", vung_list)
+    if col_hoatchat and col_hamluong and col_nhom and data2 is not None:
+        df1 = data1.rename(columns={
+            col_hoatchat: "Tên hoạt chất",
+            col_hamluong: "Hàm lượng",
+            col_nhom: "Nhóm"
+        })
+        df2 = data2.rename(columns=lambda x: x.strip())
 
-        tinh_list = df3[(df3["Miền"] == mien) & (df3["Vùng"] == vung)]["Tỉnh"].dropna().unique().tolist()
-        tinh = st.selectbox("Chọn Tỉnh", tinh_list)
+        # Chuẩn hóa nhóm chỉ lấy số cuối
+        def clean_nhom(val):
+            if pd.isna(val): return ""
+            digits = re.findall(r"\d", str(val))
+            return digits[-1] if digits else ""
 
-        bvsyt_list = df3[(df3["Miền"] == mien) & (df3["Vùng"] == vung) & (df3["Tỉnh"] == tinh)]["BV/SYT"].dropna().unique().tolist()
-        bvsyt = st.selectbox("Chọn SYT/BV", bvsyt_list)
+        df1["Nhóm"] = df1["Nhóm"].apply(clean_nhom)
+        df2["Nhóm"] = df2["Nhóm"].apply(clean_nhom)
 
-        sp_list = df3[df3["BV/SYT"] == bvsyt]["Tên sản phẩm"].dropna().unique().tolist()
-        df_filtered = df2[df2["Tên sản phẩm"].isin(sp_list)]
+        # So sánh 3 cột
+        merge_df = df1.merge(
+            df2,
+            left_on=["Tên hoạt chất", "Hàm lượng", "Nhóm"],
+            right_on=["Tên hoạt chất", "Nồng độ/hàm lượng", "Nhóm"],
+            how="left"
+        )
+
+        # Nếu có file3 và chọn bệnh viện → thêm dữ liệu triển khai
+        if data3 is not None:
+            subset3 = data3[(data3["Miền"] == mien) & (data3["Vùng"] == vung) &
+                            (data3["Tỉnh"] == tinh) & (data3["Bệnh viện/SYT"] == bv)]
+            merge_df = merge_df.merge(
+                subset3[["Tên sản phẩm", "Địa bàn", "Tên Khách hàng phụ trách triển khai"]],
+                on="Tên sản phẩm",
+                how="left"
+            )
+
+        # Hiển thị bảng rút gọn (chỉ các dòng có Tên sản phẩm)
+        df_show = merge_df[~merge_df["Tên sản phẩm"].isna()]
+        st.subheader(f"Số dòng có thể tham gia thầu: {len(df_show)}")
+        st.dataframe(df_show)
+
+        # Tải kết quả đầy đủ
+        def convert_df(df):
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.to_excel(writer, index=False)
+            return output.getvalue()
+
+        result_xlsx = convert_df(merge_df)
+        st.download_button(
+            label="📥 Tải kết quả đầy đủ (Excel)",
+            data=result_xlsx,
+            file_name="ket_qua_loc_thau.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
     else:
-        df_filtered = df2.copy()
-
-    # ========== LỌC DỮ LIỆU ==========
-    df_filtered["Tên hoạt chất"] = df_filtered["Tên hoạt chất"].str.strip().str.lower()
-    df1["Tên hoạt chất"] = df1["Tên hoạt chất"].str.strip().str.lower()
-
-    # Match chính xác hơn: theo hoạt chất, nồng độ, nhóm
-    merge_cols = ["Tên hoạt chất"]
-    for col in ["Nồng độ/Hàm lượng", "Nhóm thuốc"]:
-        if col in df1.columns and col in df_filtered.columns:
-            merge_cols.append(col)
-
-    df_result = df1.merge(df_filtered[merge_cols], on=merge_cols, how="inner")
-
-    # ========== TÍNH TRỊ GIÁ ==========
-    price_col = "Giá dự thầu" if "Giá dự thầu" in df1.columns else "Giá kế hoạch"
-    df_result["Trị giá thầu"] = df_result["Số lượng"] * df_result.get(price_col, 0)
-    df_result["Trị giá thầu"] = df_result["Trị giá thầu"].fillna(0)
-
-    # ========== HIỂN THỊ ==========
-    st.markdown("### 🔍 Lọc Danh mục có thể tham gia")
-    st.success(f"✅ Lọc được {len(df_result):,} dòng phù hợp tại BV đã chọn")
-    st.dataframe(df_result, use_container_width=True)
-
-else:
-    st.warning("⚠️ Vui lòng tải lên File 1 (DM) và File 2 (sản phẩm công ty) để bắt đầu.")
+        st.warning("Không tìm được đủ 3 cột cần thiết trong file danh mục thầu hoặc thiếu file công ty.")
